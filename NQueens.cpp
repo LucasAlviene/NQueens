@@ -1,7 +1,7 @@
 //https://github.com/prateek27/N-Queen-All-Optimisations/blob/master/n_queen_bitmask.cpp
 #include <iostream>
 #include <omp.h>
-
+#include <ctime>
 using namespace std;
 
 int ans = 0, DONE;
@@ -12,7 +12,9 @@ void solve(int rowMask, int ld, int rd)
 
     if (rowMask == DONE)
     {
-        #pragma omp atomic
+        #if defined(_OPENMP)
+            #pragma omp atomic
+        #endif
         ans++;
         return;
     }
@@ -22,18 +24,38 @@ void solve(int rowMask, int ld, int rd)
     {
         int p = safe & (-safe);
         safe = safe - p;
-        #pragma omp task firstprivate(p)
+        #if defined(_OPENMP)
+            #pragma omp task firstprivate(p)
+        #endif
         solve(rowMask | p, (ld | p) << 1, (rd | p) >> 1);
     }
+}
+
+double getTime(){
+    #if defined(_OPENMP)
+        return omp_get_wtime();
+    #else
+        return (double)clock();
+    #endif
+}
+
+double getTotalTime(double value){
+    #if defined(_OPENMP)
+        return value;
+    #else
+        return value/CLOCKS_PER_SEC;
+    #endif
 }
 
 int main(int argc, char *argv[])
 {
     int n = atoi(argv[1]);
     int nThreads = atoi(argv[2]);
-    omp_set_num_threads(nThreads);
+    #if defined(_OPENMP)
+        omp_set_num_threads(nThreads);
+    #endif
     double start, end;
-    start = omp_get_wtime();
+    start = getTime();
     DONE = ((1 << n) - 1);
     #pragma omp parallel
     {
@@ -41,10 +63,10 @@ int main(int argc, char *argv[])
         solve(0, 0, 0);
     }
 
-    end = omp_get_wtime();
+    end = getTime();
     cout << "Solucoes: " << ans << endl;
 
-    cout << "Tempo: " << end-start << endl;
+    cout << "Tempo: " << getTotalTime(end-start) << endl;
     //printf("Tempo: %f\n", end - start);
     
 }

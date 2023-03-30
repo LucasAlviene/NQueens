@@ -32,3 +32,7 @@ Por exemplo:
 Como solicitado no trabalho, foi realizado um benchmark para o conjunto de.
 N = {8,9,10,11,12,13,14,15,16,17} para T = {1,2,3,4,5,6}.
 E N = {14,15,16,17} para T = {7,8,9,10,11,12}
+
+O SpeedUp foi calculado para T = {12, 13, 14, 15, 16, 17}
+
+Relatório.pdf em anexo com mais detalhes
