@@ -3,11 +3,10 @@
 #include <stdbool.h>
 #include <time.h>
 #include <sys/time.h>
+#include <mpi.h>
 #include <inttypes.h>
 
-#if defined(_OPENMP)
 #include <omp.h>
-#endif
 
 #define BUFFER_SIZE 1024 * 2//sizeoff(int64_t) * 2
 #define MAX_N 50
@@ -111,17 +110,62 @@ double getTotalTime(double value){
 
 int main(int argc, char* argv[]){
 	int n;
-    double start, end;
-    start = getTime();
+	int worldSize, myRank;
+	MPI_Status st;
 
-    n = (argc > 1) ? atoi(argv[1]) : 8;
-    int64_t maxIter = getMaxIter(n,argc,argv);
+    MPI_Init(NULL, NULL);  // Inicialização
+    MPI_Comm_size(MPI_COMM_WORLD, &worldSize); // Quantos processos envolvidos?
+    MPI_Comm_rank(MPI_COMM_WORLD, &myRank); // Meu identificador
 
-    int sol = NQueens(n,0,maxIter);
 
-    end = getTime();
+	if(myRank == 0){
+		double start, end;
+    	start = getTime();
 
-    printf("Solucoes: %d\n",sol);
-    printf("Tempo: %f\n",getTotalTime(end-start));
+		n = (argc > 1) ? atoi(argv[1]) : 8;
+		int64_t maxIter = getMaxIter(n,argc,argv);
+		int64_t iter = maxIter/worldSize;
+		int64_t index = iter;
+		int p = 0;
+		char buffer[BUFFER_SIZE];
+		for(int i =1;i<worldSize;i++){
+			p = 0;
+			MPI_Pack(&index,1,MPI_LONG_LONG_INT,buffer,BUFFER_SIZE,&p,MPI_COMM_WORLD);
+			MPI_Pack(&iter,1,MPI_LONG_LONG_INT,buffer,BUFFER_SIZE,&p,MPI_COMM_WORLD);
+			MPI_Pack(&n,1,MPI_INT,buffer,BUFFER_SIZE,&p,MPI_COMM_WORLD);
+			MPI_Ssend((void *)buffer,p,MPI_PACKED,i, 0, MPI_COMM_WORLD);
+			index  = index + iter;
+		}
+		int sols[worldSize];
+		MPI_Request req[worldSize];
+		MPI_Status status[worldSize];
+		for(int i =1;i<worldSize;i++){
+			MPI_Irecv(&sols[i],1, MPI_INT,i,MPI_ANY_TAG,MPI_COMM_WORLD,&req[i]);
+		}
+
+		int sol = NQueens(n,index,iter);
+		for(int i =1;i<worldSize;i++){
+			MPI_Wait( &req[i], &status[i] );
+			sol += sols[i];
+		}
+
+		end = getTime();
+
+		printf("Solucoes: %d\n",sol);
+		printf("Tempo: %f\n",getTotalTime(end-start));
+	}else{
+		int p = 0;
+		int64_t iter,index;
+		char buffer[BUFFER_SIZE];
+		MPI_Recv((void *)buffer,BUFFER_SIZE,MPI_PACKED,0,MPI_ANY_TAG,MPI_COMM_WORLD, &st);
+		MPI_Unpack(buffer,BUFFER_SIZE,&p,&index,1,MPI_LONG_LONG_INT,MPI_COMM_WORLD);
+		MPI_Unpack(buffer,BUFFER_SIZE,&p,&iter,1,MPI_LONG_LONG_INT,MPI_COMM_WORLD);
+		MPI_Unpack(buffer,BUFFER_SIZE,&p,&n,1,MPI_INT,MPI_COMM_WORLD);
+		int sol = NQueens(n,index,iter);
+		MPI_Send(&sol,1,MPI_INT, 0,0, MPI_COMM_WORLD);
+	}
+
+
+	MPI_Finalize(); // Finalização
 	return 0;
 }
